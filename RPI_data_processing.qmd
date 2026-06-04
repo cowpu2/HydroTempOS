@@ -1,0 +1,91 @@
+---
+title: "RPI temp data"
+format: html
+---
+
+```{r}
+source("Setup.R")
+library(fuzzyjoin)
+
+OnBoard <- read_csv(here(source_path, "OnBoard.log"), col_names = FALSE)
+# The Raspberry Pi runs its system clock in __UTC__ (standard Linux default), so `OnBoard.log` timestamps like `2026/05/12, 19:56:03` are UTC.
+
+
+RPI <- OnBoard |> mutate("DateTime_RPI" = as.POSIXct(paste0(X1, X2), tz = "UTC") |>
+                            lubridate::with_tz("America/Chicago")) |>
+                  rename("RPI_Temp" = X3, "Fan" = X4) |> select(-X1, -X2) |> 
+                  separate(Fan, into = c(NA, "Fan"), sep = "[:]") |> 
+                  mutate(Fan = trimws(Fan)) |> 
+                  mutate("Fan_Status" = Fan == "ON")
+
+Temps <- read_csv(here(source_path, "templog.csv"))
+
+# Helper: replace values outside 1.5 * IQR fence with NA
+replace_iqr_outliers <- function(x) {
+  q   <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- q[2] - q[1]
+  if_else(x >= q[1] - 1.5 * iqr & x <= q[2] + 1.5 * iqr, x, NA_real_)
+}
+
+Sensors <- Temps |>
+  rename(
+    "DateTime"     = Timestamp,
+    "Soil_Surface" = `Bad Sensor`,
+    "Soil_4"       = `Soil Temp 4`
+  ) |>
+  mutate(
+    # Hard threshold — Soil_Surface should never exceed 105
+    Soil_Surface = if_else(Soil_Surface <= 105, Soil_Surface, NA_real_),
+    # IQR method for remaining numeric sensor columns
+    across(c(Soil_4, Enclosure, Ambient), replace_iqr_outliers)
+  )
+
+
+# Join if the datetimes are within 5 minutes (240 seconds) of each other
+AllTemps <- Sensors %>%
+  difference_inner_join(
+    RPI,
+    by = c("DateTime" = "DateTime_RPI"),
+    max_dist = 240
+  )
+
+summary(AllTemps)
+```
+
+
+
+
+```{r}
+
+df <- AllTemps
+
+lw <- 0.2
+
+
+  ggplot(df) +
+  
+  geom_line(aes(DateTime, Soil_4,       color = "Soil 4"), linewidth = lw,      na.rm = TRUE) +
+  geom_line(aes(DateTime, Soil_Surface, color = "Soil Surface"), linewidth = lw,na.rm = TRUE) +
+  geom_line(aes(DateTime, Ambient,      color = "Ambient"),     linewidth = lw,na.rm = TRUE) +
+  #geom_line(aes(DateTime, Enclosure,    color = "Enclosure"),    linewidth = lw,na.rm = TRUE) +
+  #geom_line(aes(DateTime, RPI_Temp,     color = "RPI Temp"),     linewidth = lw,na.rm = TRUE) +
+  scale_color_manual(
+    name   = "Sensor",
+    values = c(
+      "Soil 4"       = "brown",
+      "Soil Surface" = "green",
+      "Ambient"      = "red",
+      "Enclosure"    = "blue",
+      "RPI Temp"     = "deeppink3"
+    )
+  ) +
+  theme_minimal() +
+
+  theme(legend.position = "right") +
+  ggtitle(paste0("HydroTemp OS - FlatBroke Farms"))
+
+#ggsave(paste0(plot_path, "plot_name.pdf"), width = 10, height = 8)
+#print(plot_name)
+
+
+```
