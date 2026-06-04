@@ -34,7 +34,7 @@ Sensors <- Temps |>
     "Soil_4"       = `Soil Temp 4`
   ) |>
   mutate(
-    # Hard threshold — Soil_Surface should never exceed 105
+    # Hard threshold - Soil_Surface should never exceed 105
     Soil_Surface = if_else(Soil_Surface <= 105, Soil_Surface, NA_real_),
     # IQR method for remaining numeric sensor columns
     across(c(Soil_4, Enclosure, Ambient), replace_iqr_outliers)

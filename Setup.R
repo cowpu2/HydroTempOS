@@ -17,13 +17,15 @@ Package_list <- c(
 
 for (package in Package_list) {
   if (!require(package, character.only = TRUE)) {
-    install.packages(package, dependencies = TRUE)
+    renv::install(package)
   }
   
   library(package, character.only = TRUE)
 }
 
 rm(list = c("package", "Package_list"))
+
+# After installing new packages, run renv::snapshot() to record them in renv.lock
 
 ## Local stuff  =================
 source_path     <- "source_data"
