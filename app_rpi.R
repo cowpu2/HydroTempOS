@@ -15,7 +15,9 @@ replace_iqr_outliers <- function(x) {
   if_else(x >= q[1] - 1.5 * iqr & x <= q[2] + 1.5 * iqr, x, NA_real_)
 }
 
-OnBoard <- read_csv(here(source_path, "OnBoard.log"), col_names = FALSE)
+OnBoard <- read_csv(here(source_path, "OnBoard.log"),
+                    col_names      = FALSE,
+                    show_col_types = FALSE)
 
 RPI <- OnBoard |>
   mutate(
@@ -27,10 +29,16 @@ RPI <- OnBoard |>
   separate(Fan, into = c(NA, "Fan"), sep = "[:]") |>
   mutate(
     Fan        = trimws(Fan),
-    Fan_Status = as.numeric(Fan == "ON")   # 0 / 1 for plotting
+    Fan_Status = as.numeric(Fan == "ON"),  # 0 / 1 for plotting
+    RPI_Temp   = as.numeric(gsub("F$", "", trimws(RPI_Temp)))  # strip "F" suffix
   )
 
-Temps <- read_csv(here(source_path, "templog.csv"))
+# 23 rows have fewer than 5 columns (sensor dropout) - read_csv fills the
+# missing columns with NA, which is intentional. suppressWarnings() prevents
+# the "X columns, expected 5" notice from stopping the Shiny launch.
+Temps <- suppressWarnings(
+  read_csv(here(source_path, "templog.csv"), show_col_types = FALSE)
+)
 
 Sensors <- Temps |>
   rename(
@@ -57,9 +65,9 @@ sensor_meta <- tibble::tribble(
   "Soil_4",      "Soil 4",        "brown",
   "Soil_Surface","Soil Surface",  "green",
   "Ambient",     "Ambient",       "red",
-  "Enclosure",   "Enclosure",     "blue",
+  "Enclosure",   "Enclosure",     "aquamarine",
   "RPI_Temp",    "RPI Temp",      "deeppink3",
-  "Fan_Status",  "Fan Status",    "aquamarine"   
+  "Fan_Status",  "Fan Status",    "blue"   
 )
 
 date_range <- range(AllTemps$DateTime, na.rm = TRUE)
@@ -99,7 +107,7 @@ ui <- fluidPage(
 
     mainPanel(
       width = 9,
-      plotOutput("temp_plot", height = "550px")
+      plotlyOutput("temp_plot", height = "550px")
     )
   )
 )
@@ -117,7 +125,7 @@ server <- function(input, output, session) {
       )
   })
 
-  output$temp_plot <- renderPlot({
+  output$temp_plot <- renderPlotly({
 
     df  <- df_filtered()
     sel <- input$sensors
@@ -128,15 +136,12 @@ server <- function(input, output, session) {
 
     if (nrow(meta_temp) == 0 && !show_fan) {
       return(
-        ggplot() +
-          annotate("text", x = 0.5, y = 0.5,
-                   label = "No sensors selected.",
-                   size = 6, colour = "grey50") +
-          theme_void()
+        plotly_empty() |>
+          layout(title = "No sensors selected.")
       )
     }
 
-    # Pivot temperature sensors to long format — one geom_line, correct colours
+    # Pivot temperature sensors to long format -- one geom_line, correct colours
     df_long <- df |>
       select(DateTime, all_of(meta_temp$col)) |>
       pivot_longer(
@@ -181,19 +186,22 @@ server <- function(input, output, session) {
     ) |>
       mutate(label = factor(label, levels = all_levels))
 
-    ggplot(df_combined, aes(x = DateTime, y = value, colour = label)) +
+    p <- ggplot(df_combined, aes(x = DateTime, y = value, colour = label)) +
       geom_line(na.rm = TRUE) +
       scale_colour_manual(
         name   = "Sensor",
         values = all_colours
       ) +
       labs(
-        title = "HydroTemp OS – FlatBroke Farms",
+        title = "HydroTemp OS -- FlatBroke Farms",
         x     = NULL,
-        y     = "Temperature (°F)"
+        y     = "Temperature (F)"
       ) +
       theme_minimal(base_size = 14) +
       theme(legend.position = "right")
+
+    ggplotly(p, tooltip = c("x", "y", "colour")) |>
+      layout(legend = list(orientation = "v"))
   })
 }
 

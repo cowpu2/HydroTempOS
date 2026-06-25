@@ -13,6 +13,7 @@ Package_list <- c(
                   , "tidylog"
                   , "here"
                   , "shiny"
+                  , "plotly"
                   )
 
 for (package in Package_list) {

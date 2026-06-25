@@ -16,7 +16,8 @@ RPI <- OnBoard |> mutate("DateTime_RPI" = as.POSIXct(paste0(X1, X2), tz = "UTC")
                   rename("RPI_Temp" = X3, "Fan" = X4) |> select(-X1, -X2) |> 
                   separate(Fan, into = c(NA, "Fan"), sep = "[:]") |> 
                   mutate(Fan = trimws(Fan)) |> 
-                  mutate("Fan_Status" = Fan == "ON")
+                  mutate("Fan_Status" = Fan == "ON",
+                         RPI_Temp = as.numeric(gsub("F$", "", trimws(RPI_Temp))))  # strip "F" suffix
 
 Temps <- read_csv(here(source_path, "templog.csv"))
 
@@ -41,7 +42,7 @@ Sensors <- Temps |>
   )
 
 
-# Join if the datetimes are within 5 minutes (240 seconds) of each other
+# Join if the datetimes are within 4 minutes (240 seconds) of each other
 AllTemps <- Sensors %>%
   difference_inner_join(
     RPI,
@@ -67,8 +68,8 @@ lw <- 0.2
   geom_line(aes(DateTime, Soil_4,       color = "Soil 4"), linewidth = lw,      na.rm = TRUE) +
   geom_line(aes(DateTime, Soil_Surface, color = "Soil Surface"), linewidth = lw,na.rm = TRUE) +
   geom_line(aes(DateTime, Ambient,      color = "Ambient"),     linewidth = lw,na.rm = TRUE) +
-  #geom_line(aes(DateTime, Enclosure,    color = "Enclosure"),    linewidth = lw,na.rm = TRUE) +
-  #geom_line(aes(DateTime, RPI_Temp,     color = "RPI Temp"),     linewidth = lw,na.rm = TRUE) +
+  geom_line(aes(DateTime, Enclosure,    color = "Enclosure"),    linewidth = lw,na.rm = TRUE) +
+  geom_line(aes(DateTime, RPI_Temp,     color = "RPI Temp"),     linewidth = lw,na.rm = TRUE) +
   scale_color_manual(
     name   = "Sensor",
     values = c(
