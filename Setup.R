@@ -16,13 +16,22 @@ Package_list <- c(
                   , "plotly"
                   )
 
+# for (package in Package_list) {
+#   if (!require(package, character.only = TRUE)) {
+#     renv::install(package)
+#   }
+#   
+#   library(package, character.only = TRUE)
+# }
+
 for (package in Package_list) {
   if (!require(package, character.only = TRUE)) {
-    renv::install(package)
+    install.packages(package, dependencies = TRUE)
   }
   
   library(package, character.only = TRUE)
 }
+
 
 rm(list = c("package", "Package_list"))
 
